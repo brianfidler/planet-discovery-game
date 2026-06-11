@@ -48,6 +48,7 @@ function stripForSpeech(text) {
   return text
     .replace(/[▮◦↳]/g, ' ')
     .replace(/…/g, '...')
+    .replace(/\bhalley\b/gi, 'Hailey') // pronounced "hail-ee" — spoken only, text keeps the spelling
     .replace(/\s+/g, ' ')
     .trim();
 }

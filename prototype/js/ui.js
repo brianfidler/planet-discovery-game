@@ -7,7 +7,7 @@ import {
   TABLE_ROWS, F_BLOCK_ROWS, NOVEL_ELEMENTS, MATERIALS, IMAGER_RECIPE,
 } from './data/elements.js';
 import { LIFE_TIERS } from './data/narrative.js';
-import { PLANETS, getPlanet } from './data/planets.js';
+import { getSystem, resolvePlanet } from './data/systems.js';
 import { play } from './halley.js';
 import { toggleMute } from './audio.js';
 import * as voice from './voice.js';
@@ -106,7 +106,7 @@ export function setScanPrompt(label, progress) {
 // ── Planet panel (system view) ──────────────────────────────────────────────
 
 export function showPlanetPanel(planetId, onLand) {
-  const p = getPlanet(planetId);
+  const p = resolvePlanet(planetId);
   $('pp-name').textContent = p.name;
   $('pp-visited').textContent = state.visited.has(p.id) ? 'SURVEYED' : 'UNSURVEYED';
   const stats = $('pp-stats');
@@ -132,6 +132,31 @@ export function showPlanetPanel(planetId, onLand) {
 
 export function hidePlanetPanel() {
   $('planet-panel').classList.remove('open');
+}
+
+// ── Star panel (galaxy view) ────────────────────────────────────────────────
+
+export function showStarPanel(systemId, onTravel) {
+  const sys = getSystem(systemId);
+  $('sp-name').textContent = sys.name;
+  $('sp-class').textContent = sys.starClass;
+  $('sp-blurb').textContent = sys.blurb;
+  const surveyed = sys.planets.filter((p) => state.visited.has(p.id)).length;
+  $('sp-stats').innerHTML = `
+    <div class="pp-stat"><span>Planets</span><strong>${sys.planets.length}</strong></div>
+    <div class="pp-stat"><span>Surveyed</span><strong>${surveyed} / ${sys.planets.length}</strong></div>
+    <div class="pp-stat"><span>Drive range</span><strong>${sys.reachable ? 'REACHABLE' : 'OUT OF RANGE'}</strong></div>
+  `;
+  const btn = $('sp-travel');
+  const here = state.system === sys.id;
+  btn.disabled = !sys.reachable || here;
+  btn.textContent = here ? 'You are here' : sys.reachable ? 'Travel' : 'Beyond drive range';
+  btn.onclick = () => onTravel(sys.id);
+  $('star-panel').classList.add('open');
+}
+
+export function hideStarPanel() {
+  $('star-panel').classList.remove('open');
 }
 
 // ── Expanded periodic table ─────────────────────────────────────────────────
@@ -215,14 +240,15 @@ function renderJournal() {
     return;
   }
   for (const d of [...state.discoveries].reverse()) {
-    const planet = PLANETS.find((p) => p.id === d.planet);
+    let planetName = 'Unknown location';
+    try { planetName = resolvePlanet(d.planet).name; } catch { /* keep fallback */ }
     const tierLabel = LIFE_TIERS[d.tier] || 'Unclassified — declined to be catalogued';
     const card = document.createElement('div');
     card.className = `journal-card tier-${d.tier}`;
     card.innerHTML = `
       <h4>${d.name}</h4>
       <p>${tierLabel}</p>
-      <small>${planet ? planet.name : 'Unknown location'}</small>
+      <small>${planetName}</small>
     `;
     root.appendChild(card);
   }

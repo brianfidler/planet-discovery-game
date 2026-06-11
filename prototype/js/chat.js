@@ -5,7 +5,7 @@
 import { state } from './state.js';
 import { say } from './halley.js';
 import { offlineReply } from './halleyBrain.js';
-import { getPlanet } from './data/planets.js';
+import { getSystem, resolvePlanet } from './data/systems.js';
 import { MATERIALS } from './data/elements.js';
 
 const HISTORY_LIMIT = 16;
@@ -71,7 +71,9 @@ function appendLine(speaker, text, cls) {
 
 function buildContext() {
   return {
-    planet: state.planet ? getPlanet(state.planet).name : null,
+    planet: state.planet
+      ? resolvePlanet(state.planet).name
+      : `${getSystem(state.system).name} system — orbit`,
     sensor: state.sensor,
     objective: document.getElementById('objective')?.textContent || '',
     discoveries: state.discoveries.map((d) => d.name),

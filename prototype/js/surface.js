@@ -116,12 +116,13 @@ export function buildSurface(planet) {
   }
   for (const d of planet.deposits) addDeposit(d.material, d.x, d.z, d.beat);
 
-  // ── Lifeforms ──
+  // ── Lifeforms (authored ids, or {type, params} for procedural worlds) ──
   const lifeforms = [];
-  for (const id of planet.lifeforms) {
-    const builder = LIFEFORM_BUILDERS[id];
-    if (!builder) throw new Error(`No builder for lifeform: ${id}`);
-    const life = builder(heightAt);
+  for (const entry of planet.lifeforms) {
+    const type = typeof entry === 'string' ? entry : entry.type;
+    const builder = LIFEFORM_BUILDERS[type];
+    if (!builder) throw new Error(`No builder for lifeform: ${type}`);
+    const life = builder(heightAt, typeof entry === 'object' ? entry.params : undefined);
     scene.add(life.group);
     lifeforms.push(life);
     for (const s of life.scannables) scannables.push({ kind: 'lifeform', ...s });
@@ -174,7 +175,7 @@ export function buildSurface(planet) {
 
   return {
     scene, heightAt, applySensor, update, scannables,
-    zones: planet.zones.map((z) => ({ ...z })),
+    zones: (planet.zones || []).map((z) => ({ ...z })),
     spawnChitin, dispose, podPos,
   };
 }

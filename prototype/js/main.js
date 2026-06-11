@@ -10,9 +10,11 @@ import { buildSurface } from './surface.js';
 import { initHalley, play, advance, isSpeaking } from './halley.js';
 import * as ui from './ui.js';
 import * as audio from './audio.js';
-import { getPlanet } from './data/planets.js';
+import { SYSTEMS, getSystem, resolvePlanet } from './data/systems.js';
 import { LIFE_TIERS } from './data/narrative.js';
 import { initChat, toggleChat, closeChat, isChatOpen } from './chat.js';
+import { buildGalaxyScene } from './galaxy.js';
+import { announceSystemArrival, announcePlanetArrival } from './narrativeGen.js';
 
 const EYE_HEIGHT = 1.7;
 const WALK_SPEED = 8;
@@ -33,7 +35,8 @@ const systemCamera = new THREE.PerspectiveCamera(55, window.innerWidth / window.
 systemCamera.position.set(0, 58, 92);
 const surfaceCamera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 2000);
 
-const system = buildSystemScene();
+let system = buildSystemScene(getSystem('vesper'));
+const galaxy = buildGalaxyScene(SYSTEMS);
 const sysControls = new OrbitControls(systemCamera, renderer.domElement);
 sysControls.enableDamping = true;
 sysControls.maxDistance = 220;
@@ -95,7 +98,10 @@ function refreshObjective() {
   else if (state.planet === 'cinder') text = 'Survey the basalt columns north of the pod.';
   else if (state.planet === 'brume') text = 'Survey Brume. Try every sense on everything.';
   else if (state.planet === 'hush') text = 'The Hum is loudest here. Walk toward it.';
-  else if (hasFlag('intro')) text = 'Select a planet and land. Cinder is closest to the star.';
+  else if (state.mode === 'galaxy') text = 'Choose a star, Doctor. Vesper holds the main thread; the rest hold the unknown.';
+  else if (state.planet) text = 'Free survey — walk, cycle your senses (1–4), scan what answers.';
+  else if (state.system !== 'vesper') text = `Free survey of ${getSystem(state.system).name}. The Hum waits in Vesper (M → galaxy map).`;
+  else if (hasFlag('intro')) text = 'Select a planet and land. Cinder is closest to the star. (M opens the galaxy map.)';
   else text = '';
   ui.setObjective(text);
 }
@@ -115,18 +121,68 @@ function landOn(planetId) {
   ui.hidePlanetPanel();
   fadeThen(() => {
     if (surface) surface.dispose();
-    const planet = getPlanet(planetId);
+    const planet = resolvePlanet(planetId);
     surface = buildSurface(planet);
     state.mode = 'surface';
     state.planet = planetId;
+    const firstVisit = !state.visited.has(planetId);
     state.visited.add(planetId);
     setSensor('VIS');
     surfaceCamera.position.set(0, surface.heightAt(0, 0) + EYE_HEIGHT, 0);
     surfaceCamera.lookAt(0, surface.heightAt(0, -10) + EYE_HEIGHT, -10);
     sysControls.enabled = false;
-    audio.setAmbience(planetId);
+    audio.setAmbience(planet.procedural ? ambienceForBand(planet.band) : planetId);
     ui.setLocation(planet.name);
-    fireBeat(planet.arriveBeat);
+    if (planet.arriveBeat) fireBeat(planet.arriveBeat);
+    else if (firstVisit) announcePlanetArrival(planet);
+    refreshObjective();
+  });
+}
+
+function ambienceForBand(band) {
+  return band === 'scorched' ? 'cinder' : band === 'temperate' ? 'brume' : 'hush';
+}
+
+function toGalaxy() {
+  ui.hidePlanetPanel();
+  fadeThen(() => {
+    state.mode = 'galaxy';
+    ui.setLocation('Deep space — galaxy map');
+    systemCamera.position.set(0, 160, 200);
+    sysControls.target.set(0, 0, 0);
+    refreshObjective();
+  });
+}
+
+function leaveGalaxy() {
+  ui.hideStarPanel();
+  fadeThen(() => {
+    state.mode = 'system';
+    ui.setLocation(`${getSystem(state.system).name} system — orbit`);
+    systemCamera.position.set(0, 58, 92);
+    sysControls.target.set(0, 0, 0);
+    refreshObjective();
+  });
+}
+
+function travelToSystem(systemId) {
+  if (systemId === state.system) {
+    leaveGalaxy();
+    return;
+  }
+  const sys = getSystem(systemId);
+  if (!sys.reachable) return;
+  ui.hideStarPanel();
+  fadeThen(() => {
+    system.dispose();
+    state.system = systemId;
+    system = buildSystemScene(sys);
+    state.mode = 'system';
+    ui.setLocation(`${sys.name} system — orbit`);
+    systemCamera.position.set(0, 58, 92);
+    sysControls.target.set(0, 0, 0);
+    audio.setAmbience('space');
+    if (flagOnce(`sysArr-${systemId}`)) announceSystemArrival(sys);
     refreshObjective();
   });
 }
@@ -139,7 +195,7 @@ function toOrbit() {
     state.planet = null;
     sysControls.enabled = true;
     audio.setAmbience('space');
-    ui.setLocation('Vesper system — orbit');
+    ui.setLocation(`${getSystem(state.system).name} system — orbit`);
     refreshObjective();
   });
 }
@@ -273,7 +329,15 @@ window.addEventListener('keydown', (e) => {
     case 'Digit2': if (state.mode === 'surface') setSensor(SENSORS[1]); break;
     case 'Digit3': if (state.mode === 'surface') setSensor(SENSORS[2]); break;
     case 'Digit4': if (state.mode === 'surface') setSensor(SENSORS[3]); break;
-    case 'KeyG': case 'KeyM': if (state.mode === 'surface' && !state.ended) toOrbit(); break;
+    case 'KeyG':
+      if (state.mode === 'surface' && !state.ended) toOrbit();
+      break;
+    case 'KeyM':
+      if (state.ended) break;
+      if (state.mode === 'surface') toOrbit();
+      else if (state.mode === 'system') toGalaxy();
+      else if (state.mode === 'galaxy') leaveGalaxy();
+      break;
     case 'KeyX': ui.anyModalOpen() ? ui.closeModals() : ui.openModal('modal-elements'); break;
     case 'KeyJ': ui.anyModalOpen() ? ui.closeModals() : ui.openModal('modal-journal'); break;
     case 'KeyF': ui.anyModalOpen() ? ui.closeModals() : ui.openModal('modal-fab'); break;
@@ -301,18 +365,30 @@ window.addEventListener('keyup', (e) => {
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 renderer.domElement.addEventListener('click', (e) => {
-  if (state.mode !== 'system' || ui.anyModalOpen()) return;
+  if (ui.anyModalOpen()) return;
   pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
   pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
   raycaster.setFromCamera(pointer, systemCamera);
-  const hits = raycaster.intersectObjects(system.getPlanetMeshes());
-  if (hits.length > 0) {
-    const id = hits[0].object.userData.planetId;
-    system.setSelected(id);
-    ui.showPlanetPanel(id, landOn);
-  } else {
-    system.setSelected(null);
-    ui.hidePlanetPanel();
+  if (state.mode === 'system') {
+    const hits = raycaster.intersectObjects(system.getPlanetMeshes());
+    if (hits.length > 0) {
+      const id = hits[0].object.userData.planetId;
+      system.setSelected(id);
+      ui.showPlanetPanel(id, landOn);
+    } else {
+      system.setSelected(null);
+      ui.hidePlanetPanel();
+    }
+  } else if (state.mode === 'galaxy') {
+    const hits = raycaster.intersectObjects(galaxy.getStarMeshes());
+    if (hits.length > 0) {
+      const id = hits[0].object.userData.systemId;
+      galaxy.setSelected(id);
+      ui.showStarPanel(id, travelToSystem);
+    } else {
+      galaxy.setSelected(null);
+      ui.hideStarPanel();
+    }
   }
 });
 
@@ -351,7 +427,7 @@ ui.setSensorUI('VIS');
 
 // Dev/test harness hook — lets automated agents drive the game (see
 // docs/VERTICAL-SLICE.md testing approach). Not used by gameplay.
-window.__game = { state, landOn, toOrbit, setSensor, fireBeat };
+window.__game = { state, landOn, toOrbit, setSensor, fireBeat, travelToSystem, toGalaxy, SYSTEMS };
 
 const clock = new THREE.Clock();
 let elapsed = 0;
@@ -365,6 +441,10 @@ function tick() {
     sysControls.update();
     system.update(dt, elapsed);
     renderer.render(system.scene, systemCamera);
+  } else if (state.mode === 'galaxy') {
+    sysControls.update();
+    galaxy.update(dt, elapsed);
+    renderer.render(galaxy.scene, systemCamera);
   } else if (state.mode === 'surface' && surface) {
     if (walkControls.isLocked) {
       const speed = move.run ? RUN_SPEED : WALK_SPEED;

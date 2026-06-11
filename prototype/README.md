@@ -34,6 +34,17 @@ ago lights up* — in the cheapest possible medium, before committing to engine 
 Everything here (planet data, narrative beats, element properties, the discovery-tier
 model) is data-driven and ports directly into C# ScriptableObjects.
 
+## The galaxy layer (procedural, deterministic, permanent)
+
+Beyond hand-authored Vesper, the galaxy map (M) holds five reachable
+procedurally generated star systems (plus two teased beyond drive range).
+Generation is **causal** — star class → luminosity → orbital distance →
+temperature band → palette, atmosphere, chemistry, possible life — and
+**deterministic**: every world derives from a fixed seed through pure
+functions, so the same planet exists identically on every visit, forever,
+with zero storage. Permanence = determinism; saves only ever need
+`{seed, GENERATOR_VERSION, player actions}`. See `js/data/systems.js`.
+
 ## What the slice proves (mapping to docs)
 
 - **One system, 3 hand-tuned planets** with causal formation stories — Cinder, Brume, Hush.

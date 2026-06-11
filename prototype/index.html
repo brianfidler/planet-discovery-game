@@ -152,13 +152,18 @@
   .toast.show { opacity: 1; transform: translateX(0); }
 
   /* ── Planet panel ── */
-  #planet-panel {
+  #planet-panel, #star-panel {
     position: absolute; top: 60px; left: 22px; width: 330px;
     background: var(--panel); border: 1px solid var(--line);
     padding: 18px; display: none;
   }
-  #planet-panel.open { display: block; }
-  #pp-name { font-size: 1.05rem; font-weight: 500; color: var(--cyan); letter-spacing: 0.06em; }
+  #planet-panel.open, #star-panel.open { display: block; }
+  #pp-name, #sp-name { font-size: 1.05rem; font-weight: 500; color: var(--cyan); letter-spacing: 0.06em; }
+  #sp-class { font-size: 0.68rem; letter-spacing: 0.22em; color: var(--muted); text-transform: uppercase; margin-top: 2px; }
+  #sp-blurb { font-size: 0.8rem; line-height: 1.6; margin-top: 10px; opacity: 0.85; }
+  #sp-stats { margin-top: 12px; display: grid; gap: 4px; }
+  #sp-travel { margin-top: 16px; width: 100%; }
+  #sp-travel:disabled { opacity: 0.4; cursor: not-allowed; }
   #pp-visited { font-size: 0.62rem; letter-spacing: 0.25em; color: var(--muted); }
   .pp-section {
     margin-top: 12px; font-size: 0.64rem; letter-spacing: 0.22em;
@@ -390,7 +395,7 @@
     </p>
     <button class="btn" id="btn-start">Begin Survey</button>
     <p class="controls-note">
-      WASD move · mouse look · 1–4 switch sense · hold E scan · G return to orbit<br/>
+      WASD move · mouse look · 1–4 switch sense · hold E scan · G return to orbit · M galaxy map<br/>
       X elements chart · J journal · F fabricator · T talk to Halley · V toggle voice · ⏎ advance dialogue<br/>
       headphones recommended — Halley speaks, and listens
     </p>
@@ -430,6 +435,14 @@
       <ul id="pp-formation"></ul>
       <div id="pp-hum">⚠ THE HUM — SIGNAL SOURCE TRIANGULATES HERE</div>
       <button class="btn primary" id="pp-land">Land</button>
+    </div>
+
+    <div id="star-panel">
+      <div id="sp-name">—</div>
+      <div id="sp-class"></div>
+      <p id="sp-blurb"></p>
+      <div id="sp-stats"></div>
+      <button class="btn primary" id="sp-travel">Travel</button>
     </div>
 
     <div id="menu-bar">

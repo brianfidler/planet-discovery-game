@@ -390,7 +390,135 @@ export function buildWatcherCliff(heightAt) {
   return { group, setSensor, update, scannables: [] };
 }
 
+// ── Procedural worlds — parametrized generic lifeforms ──────────────────────
+
+const GENERIC_GLOW_COLORS = [0xcc4422, 0x44cc88, 0xcc8844, 0x66aacc, 0xaa66cc];
+
+export function buildGenericMats(heightAt, params) {
+  const rng = mulberry32(params.seed);
+  const color = GENERIC_GLOW_COLORS[params.seed % GENERIC_GLOW_COLORS.length];
+  const group = new THREE.Group();
+  const mats = [];
+  const cx = (rng() - 0.5) * 120;
+  const cz = (rng() - 0.5) * 120;
+  for (let i = 0; i < 5 + Math.floor(rng() * 4); i++) {
+    const x = cx + (rng() - 0.5) * 40;
+    const z = cz + (rng() - 0.5) * 40;
+    const mat = new THREE.MeshStandardMaterial({ color: 0x262220, roughness: 1 });
+    const mesh = new THREE.Mesh(new THREE.CircleGeometry(1.2 + rng() * 2.4, 12), mat);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(x, heightAt(x, z) + 0.06, z);
+    group.add(mesh);
+    mats.push({ mat, phase: rng() * 6 });
+  }
+  function setSensor(mode) {
+    const thermal = mode === 'THM';
+    for (const m of mats) {
+      m.mat.color.setHex(thermal ? 0x120c08 : 0x262220);
+      m.mat.emissive.setHex(thermal ? color : 0x000000);
+      m.mat.emissiveIntensity = thermal ? 0.45 : 0;
+    }
+  }
+  function update(dt, elapsed, ctx) {
+    if (ctx.sensor !== 'THM') return;
+    for (const m of mats) m.mat.emissiveIntensity = 0.3 + 0.25 * Math.sin(elapsed * 0.6 + m.phase);
+  }
+  return {
+    group, setSensor, update,
+    scannables: [{
+      id: `${params.planetId}-mats`, name: params.name, tier: 1, beat: null,
+      requires: ['THM'], range: 22, pos: new THREE.Vector3(cx, 1, cz),
+    }],
+  };
+}
+
+export function buildGenericChoir(heightAt, params) {
+  const rng = mulberry32(params.seed);
+  const color = GENERIC_GLOW_COLORS[(params.seed >> 3) % GENERIC_GLOW_COLORS.length];
+  const group = new THREE.Group();
+  const columns = [];
+  const cx = (rng() - 0.5) * 140;
+  const cz = (rng() - 0.5) * 140;
+  const count = 5 + Math.floor(rng() * 5);
+  for (let i = 0; i < count; i++) {
+    const a = (i / count) * Math.PI * 2 + rng() * 0.5;
+    const d = 4 + rng() * 12;
+    const x = cx + Math.cos(a) * d;
+    const z = cz + Math.sin(a) * d;
+    const height = 5 + rng() * 7;
+    const mat = new THREE.MeshStandardMaterial({ color: 0x26201c, roughness: 0.95, flatShading: true });
+    const mesh = new THREE.Mesh(new THREE.CylinderGeometry(0.7 + rng() * 0.5, 1.3 + rng() * 0.6, height, 6), mat);
+    mesh.position.set(x, heightAt(x, z) + height / 2 - 0.5, z);
+    group.add(mesh);
+    columns.push({ mat, phase: i * 0.7 });
+  }
+  function setSensor(mode) {
+    const thermal = mode === 'THM';
+    for (const c of columns) {
+      c.mat.color.setHex(thermal ? 0x120a06 : 0x26201c);
+      c.mat.emissive.setHex(thermal ? color : 0x000000);
+      c.mat.emissiveIntensity = thermal ? 0.5 : 0;
+    }
+  }
+  function update(dt, elapsed, ctx) {
+    if (ctx.sensor !== 'THM') return;
+    for (const c of columns) {
+      c.mat.emissiveIntensity = 0.3 + 0.55 * Math.max(0, Math.sin(elapsed * 0.8 - c.phase));
+    }
+  }
+  return {
+    group, setSensor, update,
+    scannables: [{
+      id: `${params.planetId}-choir`, name: params.name, tier: 3, beat: null,
+      requires: ['THM'], range: 40, pos: new THREE.Vector3(cx, 5, cz),
+    }],
+  };
+}
+
+export function buildDrifters(heightAt, params) {
+  const rng = mulberry32(params.seed);
+  const group = new THREE.Group();
+  const wisps = [];
+  const cx = (rng() - 0.5) * 100;
+  const cz = (rng() - 0.5) * 100;
+  for (let i = 0; i < 4 + Math.floor(rng() * 3); i++) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x88ffee, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide,
+    });
+    const wisp = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 2.2), mat);
+    group.add(wisp);
+    wisps.push({
+      mesh: wisp, mat,
+      orbitR: 6 + rng() * 18, orbitSpeed: 0.1 + rng() * 0.2,
+      phase: rng() * Math.PI * 2, bobPhase: rng() * 6,
+    });
+  }
+  function setSensor(mode) {
+    if (mode !== 'EMF') for (const w of wisps) w.mat.opacity = 0;
+  }
+  function update(dt, elapsed, ctx) {
+    for (const w of wisps) {
+      const a = elapsed * w.orbitSpeed + w.phase;
+      const x = cx + Math.cos(a) * w.orbitR;
+      const z = cz + Math.sin(a) * w.orbitR;
+      w.mesh.position.set(x, ctx.heightAt(x, z) + 2.2 + Math.sin(elapsed * 0.7 + w.bobPhase), z);
+      w.mesh.lookAt(ctx.playerPos.x, w.mesh.position.y, ctx.playerPos.z);
+      w.mat.opacity = ctx.sensor === 'EMF' ? 0.3 + 0.25 * Math.sin(elapsed * 6 + w.bobPhase) : 0;
+    }
+  }
+  return {
+    group, setSensor, update,
+    scannables: [{
+      id: `${params.planetId}-drifters`, name: params.name, tier: 2, beat: null,
+      requires: ['EMF'], range: 30, pos: new THREE.Vector3(cx, 3, cz),
+    }],
+  };
+}
+
 export const LIFEFORM_BUILDERS = {
+  genericMats: buildGenericMats,
+  genericChoir: buildGenericChoir,
+  drifters: buildDrifters,
   slowChoir: buildSlowChoir,
   ventMats: buildVentMats,
   greeterScout: buildGreeterScout,

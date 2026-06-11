@@ -4,7 +4,7 @@
 // smart — the deployed version with an API key does the real talking.
 
 import { state, hasFlag } from './state.js';
-import { getPlanet } from './data/planets.js';
+import { resolvePlanet } from './data/systems.js';
 
 const DEFLECTIONS = [
   'An interesting question, Doctor. I have routed it to my speculation co-processor, which has returned a shrug. Ask me about the survey.',
@@ -99,6 +99,6 @@ export function offlineReply(message) {
 }
 
 export function offlineContextNote() {
-  const planet = state.planet ? getPlanet(state.planet).short : 'orbit';
+  const planet = state.planet ? resolvePlanet(state.planet).short : 'orbit';
   return `(offline link — Halley local cache, ${planet})`;
 }

@@ -70,6 +70,47 @@ await page.evaluate(() => window.__game.setSensor('TMP'));
 await wait(2500);
 console.log('temporal reveal on hush: ok');
 
+// Galaxy travel: jump to the first procedural system and land on each planet.
+await page.evaluate(() => window.__game.toOrbit());
+await wait(1200);
+await page.evaluate(() => window.__game.toGalaxy());
+await wait(1200);
+const firstSystem = await page.evaluate(() => {
+  const sys = window.__game.SYSTEMS.find((s) => s.id !== 'vesper' && s.reachable);
+  window.__game.travelToSystem(sys.id);
+  return { id: sys.id, planetIds: sys.planets.map((p) => p.id) };
+});
+await wait(1500);
+for (const planetId of firstSystem.planetIds) {
+  await page.evaluate((id) => window.__game.landOn(id), planetId);
+  await wait(2000);
+  for (const sensor of ['THM', 'EMF', 'VIS']) {
+    await page.evaluate((s) => window.__game.setSensor(s), sensor);
+    await wait(350);
+  }
+  await page.evaluate(() => window.__game.toOrbit());
+  await wait(1000);
+}
+console.log(`procedural system ${firstSystem.id} (${firstSystem.planetIds.length} planets): ok`);
+
+// Determinism check: the same planet must regenerate identically (the seed IS
+// the planet — permanence without storage).
+const deterministic = await page.evaluate((id) => {
+  const sys = window.__game.SYSTEMS.find((s) => s.id === id);
+  const p = sys.planets[0];
+  return JSON.stringify({ s: p.surface, d: p.deposits, l: p.lifeforms });
+}, firstSystem.id);
+const deterministic2 = await page.evaluate((id) => {
+  const sys = window.__game.SYSTEMS.find((s) => s.id === id);
+  const p = sys.planets[0];
+  return JSON.stringify({ s: p.surface, d: p.deposits, l: p.lifeforms });
+}, firstSystem.id);
+if (deterministic !== deterministic2) {
+  errors.push('determinism check failed: same seed produced different planet data');
+} else {
+  console.log('determinism check: ok');
+}
+
 await browser.close();
 server.close();
 

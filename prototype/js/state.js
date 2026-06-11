@@ -2,7 +2,8 @@
 // presentation reads it — keeping the two layers separable per the docs.
 
 export const state = {
-  mode: 'title', // 'title' | 'system' | 'surface'
+  mode: 'title', // 'title' | 'galaxy' | 'system' | 'surface'
+  system: 'vesper', // current star system id
   planet: null, // planet id while on surface
   sensor: 'VIS',
   discoveries: [], // { id, name, tier, planet }

@@ -1,21 +1,22 @@
-// The Vesper system view: star, three orbiting planets, orbit rings,
-// a starfield, and click-to-select. Travel happens from here.
+// A star system view: star, orbiting planets, orbit rings, a starfield, and
+// click-to-select. Parametrized by system config — works for Vesper and for
+// every procedurally generated system.
 
 import * as THREE from 'three';
-import { PLANETS, STAR } from './data/planets.js';
 
-export function buildSystemScene() {
+export function buildSystemScene(systemCfg) {
+  const PLANETS = systemCfg.planets;
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x030308);
 
   const star = new THREE.Mesh(
     new THREE.SphereGeometry(6, 32, 24),
-    new THREE.MeshBasicMaterial({ color: STAR.color }),
+    new THREE.MeshBasicMaterial({ color: systemCfg.starColor }),
   );
   scene.add(star);
   const corona = new THREE.Mesh(
     new THREE.SphereGeometry(7.4, 32, 24),
-    new THREE.MeshBasicMaterial({ color: STAR.color, transparent: true, opacity: 0.18, side: THREE.BackSide }),
+    new THREE.MeshBasicMaterial({ color: systemCfg.starColor, transparent: true, opacity: 0.18, side: THREE.BackSide }),
   );
   scene.add(corona);
   const starLight = new THREE.PointLight(0xffd9a8, 2200, 0, 1.8);
@@ -47,8 +48,10 @@ export function buildSystemScene() {
     planetMeshes.push({ cfg: p, mesh, halo });
   }
 
-  // Hush pulses faintly in the map view — the Hum, visible from orbit.
-  const hushEntry = planetMeshes.find((p) => p.cfg.id === 'hush');
+  // The Hum's source pulses faintly in the map view (Vesper III only).
+  const hushEntry = systemCfg.pulsePlanetId
+    ? planetMeshes.find((p) => p.cfg.id === systemCfg.pulsePlanetId)
+    : null;
 
   // Background starfield
   const COUNT = 2400;
@@ -92,5 +95,15 @@ export function buildSystemScene() {
     return planetMeshes.map((p) => p.mesh);
   }
 
-  return { scene, update, setSelected, getPlanetMeshes };
+  function dispose() {
+    scene.traverse((obj) => {
+      if (obj.geometry) obj.geometry.dispose();
+      if (obj.material) {
+        const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+        for (const m of mats) m.dispose();
+      }
+    });
+  }
+
+  return { scene, update, setSelected, getPlanetMeshes, dispose };
 }

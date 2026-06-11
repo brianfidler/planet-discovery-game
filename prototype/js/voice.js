@@ -1,11 +1,15 @@
 // Halley's voice via the Web Speech API. Zero assets, works offline.
 // Local (on-device) voices are preferred — network voices can stall mid-line.
 
+// Halley is voiced female with an Irish accent. macOS/iOS ship "Moira"
+// (en-IE); platforms without an Irish voice fall back to female English.
 const PREFERRED_VOICES = [
-  'Samantha', // macOS — warm, clear
-  'Karen', 'Moira', 'Tessa', 'Daniel',
-  'Google UK English Female', 'Google US English',
+  'Moira', // macOS — Irish English, the canonical Halley
+  'Samantha', 'Karen', 'Tessa', 'Serena', 'Fiona',
+  'Google UK English Female',
+  'Microsoft Emma Online (Natural) - English (Ireland)',
   'Microsoft Aria Online (Natural) - English (United States)',
+  'Google US English',
 ];
 const RATE = 1.04;
 const PITCH = 1.06;
@@ -23,6 +27,11 @@ function supported() {
 function pickVoice() {
   const voices = window.speechSynthesis.getVoices();
   if (voices.length === 0) return null;
+  // First choice: any Irish English voice (Moira on Apple, Emma on Edge, …).
+  const irish = voices.filter((v) => v.lang?.replace('_', '-') === 'en-IE' || /irish|ireland/i.test(v.name));
+  if (irish.length > 0) {
+    return irish.find((v) => v.localService) || irish[0];
+  }
   for (const name of PREFERRED_VOICES) {
     const v = voices.find((x) => x.name === name);
     if (v) return v;

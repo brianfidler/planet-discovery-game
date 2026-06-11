@@ -144,6 +144,10 @@ export const BEATS = {
     { t: 'When we get home, I want to point the imager at Earth. — Sleep well, Doctor. Let’s go see home for the first time.' },
   ],
 
+  launchHint: [
+    { t: 'One more thing, Doctor — when you are done down here, the pod can retrieve you from anywhere on the surface. Just signal: the G key on your suit. The ascent is "teleport-assisted." The engineers made me sign something about not explaining it further.' },
+  ],
+
   perimeter: [
     { t: 'Survey perimeter, Doctor. Beyond this ridge my maps degrade into guesswork and optimism. The pod is the other way.' },
   ],

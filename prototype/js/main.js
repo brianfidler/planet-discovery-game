@@ -135,6 +135,7 @@ function landOn(planetId) {
     ui.setLocation(planet.name);
     if (planet.arriveBeat) fireBeat(planet.arriveBeat);
     else if (firstVisit) announcePlanetArrival(planet);
+    fireBeat('launchHint'); // first landing only — queues after the arrival lines
     refreshObjective();
   });
 }
@@ -417,6 +418,9 @@ document.getElementById('btn-start').addEventListener('click', () => {
 initHalley();
 initChat();
 document.getElementById('btn-talk').addEventListener('click', toggleChat);
+document.getElementById('btn-launch').addEventListener('click', () => {
+  if (state.mode === 'surface' && !state.ended) toOrbit();
+});
 ui.initUI({
   onImagerBuilt() {
     ui.setSensorUI(state.sensor);
@@ -487,6 +491,10 @@ function tick() {
   const wantPrompt = state.mode === 'surface' && !walkControls.isLocked && !ui.anyModalOpen()
     && !isChatOpen() && !state.ended && endingPhase < 2;
   lockPrompt.classList.toggle('visible', wantPrompt);
+
+  const onSurface = state.mode === 'surface' && !state.ended;
+  document.getElementById('launch-hint').classList.toggle('visible', onSurface);
+  document.getElementById('btn-launch').classList.toggle('visible', onSurface);
 }
 
 tick();

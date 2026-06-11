@@ -94,6 +94,17 @@
   #menu-bar {
     position: absolute; bottom: 18px; right: 22px; display: flex; gap: 6px;
   }
+  #btn-launch { display: none; }
+  #btn-launch.visible { display: block; border-color: var(--amber) !important; color: var(--amber) !important; }
+
+  #launch-hint {
+    position: absolute; bottom: 18px; left: 22px;
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 8px 14px; font-size: 0.72rem; letter-spacing: 0.14em; color: var(--cyan);
+    display: none; pointer-events: none;
+  }
+  #launch-hint.visible { display: block; }
+  #launch-hint b { color: var(--amber); }
   #menu-bar button {
     background: var(--panel); border: 1px solid var(--line); color: var(--muted);
     padding: 7px 12px; font-size: 0.7rem; letter-spacing: 0.1em; cursor: pointer; font-family: inherit;
@@ -445,7 +456,10 @@
       <button class="btn primary" id="sp-travel">Travel</button>
     </div>
 
+    <div id="launch-hint">⏏ LAUNCH TO ORBIT — <b>G</b></div>
+
     <div id="menu-bar">
+      <button id="btn-launch">⏏ Launch [G]</button>
       <button id="btn-elements">Elements [X]</button>
       <button id="btn-journal">Journal [J]</button>
       <button id="btn-fab">Fabricator [F]</button>

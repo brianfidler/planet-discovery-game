@@ -39,6 +39,12 @@ export function play(beatId) {
   emit('beatPlayed', beatId);
 }
 
+// Speak a single dynamic line (chat replies) outside the authored beats.
+export function say(text) {
+  queue.push({ t: text });
+  if (!current) next();
+}
+
 export function isSpeaking() {
   return current !== null || queue.length > 0;
 }

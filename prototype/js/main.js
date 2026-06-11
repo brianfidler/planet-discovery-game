@@ -12,6 +12,7 @@ import * as ui from './ui.js';
 import * as audio from './audio.js';
 import { getPlanet } from './data/planets.js';
 import { LIFE_TIERS } from './data/narrative.js';
+import { initChat, toggleChat, closeChat, isChatOpen } from './chat.js';
 
 const EYE_HEIGHT = 1.7;
 const WALK_SPEED = 8;
@@ -252,7 +253,13 @@ function updateZones() {
 
 const move = { f: false, b: false, l: false, r: false, run: false };
 
+function typingInField(e) {
+  const tag = e.target?.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA';
+}
+
 window.addEventListener('keydown', (e) => {
+  if (typingInField(e)) return; // chat input owns the keyboard while focused
   if (e.repeat) return;
   switch (e.code) {
     case 'KeyW': move.f = true; break;
@@ -271,11 +278,14 @@ window.addEventListener('keydown', (e) => {
     case 'KeyJ': ui.anyModalOpen() ? ui.closeModals() : ui.openModal('modal-journal'); break;
     case 'KeyF': ui.anyModalOpen() ? ui.closeModals() : ui.openModal('modal-fab'); break;
     case 'KeyV': ui.toggleVoiceUI(); break;
+    case 'KeyT': e.preventDefault(); toggleChat(); break;
+    case 'Escape': closeChat(); break;
     default: break;
   }
 });
 
 window.addEventListener('keyup', (e) => {
+  if (typingInField(e)) return;
   switch (e.code) {
     case 'KeyW': move.f = false; break;
     case 'KeyS': move.b = false; break;
@@ -329,6 +339,8 @@ document.getElementById('btn-start').addEventListener('click', () => {
 // ── Boot & loop ─────────────────────────────────────────────────────────────
 
 initHalley();
+initChat();
+document.getElementById('btn-talk').addEventListener('click', toggleChat);
 ui.initUI({
   onImagerBuilt() {
     ui.setSensorUI(state.sensor);
@@ -393,7 +405,7 @@ function tick() {
   // Lock prompt visibility.
   const lockPrompt = document.getElementById('lock-prompt');
   const wantPrompt = state.mode === 'surface' && !walkControls.isLocked && !ui.anyModalOpen()
-    && !state.ended && endingPhase < 2;
+    && !isChatOpen() && !state.ended && endingPhase < 2;
   lockPrompt.classList.toggle('visible', wantPrompt);
 }
 

@@ -1,0 +1,9 @@
+{
+  "name": "planet-discovery-prototype",
+  "private": true,
+  "type": "module",
+  "description": "The Catalogue — vertical-slice prototype for the Planet Discovery Game",
+  "scripts": {
+    "start": "npx serve ."
+  }
+}

@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Catalogue — Planet Discovery Prototype</title>
+<style>
+  :root {
+    --amber: #ffb347;
+    --cyan: #7fd8e8;
+    --ink: #0a0c12;
+    --panel: rgba(10, 14, 22, 0.88);
+    --line: rgba(127, 216, 232, 0.25);
+    --text: #d8e2ea;
+    --muted: #7a8794;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; overflow: hidden; background: var(--ink); }
+  body {
+    font-family: 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+    color: var(--text);
+    user-select: none;
+  }
+  #canvas-root, #canvas-root canvas { position: fixed; inset: 0; }
+
+  .hidden { display: none !important; }
+  .mono { font-family: 'SF Mono', 'Menlo', 'Consolas', monospace; }
+
+  /* ── Title screen ── */
+  #title-screen {
+    position: fixed; inset: 0; z-index: 60;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: radial-gradient(ellipse at 50% 30%, #101626 0%, #05070d 70%);
+    text-align: center; gap: 18px; padding: 24px;
+  }
+  #title-screen h1 {
+    font-size: clamp(2.2rem, 6vw, 4.2rem); letter-spacing: 0.35em;
+    font-weight: 300; color: var(--cyan); text-indent: 0.35em;
+  }
+  #title-screen .sub {
+    color: var(--muted); letter-spacing: 0.2em; font-size: 0.8rem; text-transform: uppercase;
+  }
+  #title-screen .premise {
+    max-width: 560px; color: var(--text); line-height: 1.7; font-size: 0.95rem; opacity: 0.85;
+  }
+  #title-screen .controls-note { color: var(--muted); font-size: 0.78rem; line-height: 1.8; }
+  .btn {
+    background: transparent; border: 1px solid var(--cyan); color: var(--cyan);
+    padding: 12px 36px; font-size: 0.95rem; letter-spacing: 0.25em; text-transform: uppercase;
+    cursor: pointer; transition: all 0.25s; font-family: inherit;
+  }
+  .btn:hover { background: var(--cyan); color: #04121a; }
+  .btn.primary { border-color: var(--amber); color: var(--amber); }
+  .btn.primary:hover { background: var(--amber); color: #1a0e00; }
+
+  /* ── Fade veil ── */
+  #fade {
+    position: fixed; inset: 0; z-index: 55; background: #000;
+    opacity: 0; pointer-events: none; transition: opacity 0.6s;
+  }
+  #fade.on { opacity: 1; pointer-events: all; }
+
+  /* ── HUD ── */
+  #hud { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
+  #hud > * { pointer-events: auto; }
+  /* Passive readouts must not swallow clicks meant for the 3D canvas. */
+  #location, #objective, #crosshair, #scan-prompt, #dialogue, #toast-root { pointer-events: none; }
+
+  #location {
+    position: absolute; top: 18px; left: 22px;
+    font-size: 0.8rem; letter-spacing: 0.22em; text-transform: uppercase; color: var(--cyan);
+  }
+  #objective {
+    position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+    max-width: 46vw; text-align: center;
+    font-size: 0.82rem; color: var(--amber); letter-spacing: 0.06em;
+    text-shadow: 0 1px 6px rgba(0,0,0,0.9);
+  }
+
+  #sensor-bar {
+    position: absolute; top: 60px; right: 22px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  #sensor-bar button {
+    width: 118px; padding: 8px 10px; text-align: left;
+    background: var(--panel); border: 1px solid var(--line); color: var(--muted);
+    font-family: inherit; font-size: 0.72rem; letter-spacing: 0.12em; cursor: pointer;
+  }
+  #sensor-bar button .key { float: right; opacity: 0.6; }
+  #sensor-bar button.active { border-color: var(--amber); color: var(--amber); }
+  #sensor-bar button.locked { opacity: 0.4; }
+  #sensor-bar button.locked::after { content: ' 🔒'; }
+
+  #menu-bar {
+    position: absolute; bottom: 18px; right: 22px; display: flex; gap: 6px;
+  }
+  #menu-bar button {
+    background: var(--panel); border: 1px solid var(--line); color: var(--muted);
+    padding: 7px 12px; font-size: 0.7rem; letter-spacing: 0.1em; cursor: pointer; font-family: inherit;
+  }
+  #menu-bar button:hover { color: var(--cyan); border-color: var(--cyan); }
+
+  /* ── Crosshair + scan ── */
+  #crosshair {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 6px; height: 6px; border-radius: 50%;
+    background: rgba(216, 226, 234, 0.7);
+  }
+  #scan-prompt {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 110px; height: 110px; opacity: 0; transition: opacity 0.2s;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #scan-prompt.visible { opacity: 1; }
+  #scan-ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    background: conic-gradient(var(--amber) calc(var(--p, 0) * 1%), rgba(127,216,232,0.18) 0);
+    -webkit-mask: radial-gradient(circle, transparent 52px, #000 53px);
+    mask: radial-gradient(circle, transparent 52px, #000 53px);
+  }
+  #scan-label {
+    position: absolute; top: 116px; left: 50%; transform: translateX(-50%);
+    white-space: nowrap; font-size: 0.78rem; color: var(--amber);
+    letter-spacing: 0.08em; text-shadow: 0 1px 6px #000;
+  }
+
+  /* ── Dialogue ── */
+  #dialogue {
+    position: absolute; bottom: 64px; left: 50%; transform: translateX(-50%);
+    width: min(720px, 86vw); background: var(--panel);
+    border: 1px solid var(--line); border-left: 3px solid var(--cyan);
+    padding: 14px 18px; opacity: 0; transition: opacity 0.25s; pointer-events: none;
+  }
+  #dialogue.visible { opacity: 1; }
+  #dialogue.sys { border-left-color: var(--amber); }
+  #dialogue.sys #dialogue-speaker { color: var(--amber); }
+  #dialogue-speaker {
+    font-size: 0.68rem; letter-spacing: 0.3em; color: var(--cyan); margin-bottom: 6px;
+  }
+  #dialogue-text { font-size: 0.94rem; line-height: 1.6; min-height: 2.6em; }
+  #dialogue-hint { text-align: right; font-size: 0.66rem; color: var(--muted); margin-top: 6px; }
+
+  /* ── Toasts ── */
+  #toast-root {
+    position: absolute; top: 110px; left: 22px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .toast {
+    background: var(--panel); border: 1px solid var(--amber); color: var(--amber);
+    padding: 9px 14px; font-size: 0.78rem; letter-spacing: 0.06em;
+    opacity: 0; transform: translateX(-12px); transition: all 0.4s; max-width: 360px;
+  }
+  .toast.show { opacity: 1; transform: translateX(0); }
+
+  /* ── Planet panel ── */
+  #planet-panel {
+    position: absolute; top: 60px; left: 22px; width: 330px;
+    background: var(--panel); border: 1px solid var(--line);
+    padding: 18px; display: none;
+  }
+  #planet-panel.open { display: block; }
+  #pp-name { font-size: 1.05rem; font-weight: 500; color: var(--cyan); letter-spacing: 0.06em; }
+  #pp-visited { font-size: 0.62rem; letter-spacing: 0.25em; color: var(--muted); }
+  .pp-section {
+    margin-top: 12px; font-size: 0.64rem; letter-spacing: 0.22em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  #pp-stats { margin-top: 6px; display: grid; gap: 4px; }
+  .pp-stat { display: flex; justify-content: space-between; font-size: 0.78rem; }
+  .pp-stat span { color: var(--muted); }
+  #pp-formation { margin: 6px 0 0 0; list-style: none; }
+  #pp-formation li {
+    font-size: 0.74rem; line-height: 1.5; color: var(--text); opacity: 0.85; padding-left: 14px; position: relative;
+  }
+  #pp-formation li::before { content: '↳'; position: absolute; left: 0; color: var(--cyan); opacity: 0.6; }
+  #pp-formation li:first-child::before { content: '◦'; }
+  #pp-hum {
+    display: none; margin-top: 12px; padding: 8px 10px; border: 1px solid var(--amber);
+    color: var(--amber); font-size: 0.74rem; letter-spacing: 0.08em;
+    animation: humPulse 2.4s infinite;
+  }
+  @keyframes humPulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+  #pp-land { margin-top: 16px; width: 100%; }
+
+  /* ── Modals ── */
+  .modal {
+    position: fixed; inset: 0; z-index: 40; display: none;
+    align-items: center; justify-content: center; background: rgba(2, 4, 8, 0.72);
+  }
+  .modal.open { display: flex; }
+  .modal-card {
+    background: var(--panel); border: 1px solid var(--line);
+    width: min(960px, 94vw); max-height: 88vh; overflow-y: auto; padding: 22px 26px;
+  }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .modal-head h2 {
+    font-size: 0.95rem; letter-spacing: 0.3em; text-transform: uppercase; font-weight: 400; color: var(--cyan);
+  }
+  .modal-head button {
+    background: none; border: 1px solid var(--line); color: var(--muted);
+    padding: 4px 12px; cursor: pointer; font-family: inherit;
+  }
+  .muted { color: var(--muted); font-size: 0.82rem; line-height: 1.6; }
+
+  /* ── Periodic table ── */
+  #ptable { display: grid; grid-template-columns: repeat(18, 1fr); gap: 3px; }
+  .pt-cell {
+    aspect-ratio: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-size: 0.62rem; border: 1px solid transparent;
+  }
+  .pt-cell.real { background: rgba(122, 135, 148, 0.10); color: var(--muted); border-color: rgba(122,135,148,0.12); }
+  .pt-cell.empty { background: transparent; }
+  .novel-band {
+    margin-top: 14px; padding: 12px; border: 1px solid var(--amber);
+    background: rgba(255, 179, 71, 0.04);
+  }
+  .novel-band h3 {
+    font-size: 0.68rem; letter-spacing: 0.28em; color: var(--amber);
+    text-transform: uppercase; font-weight: 400; margin-bottom: 10px;
+  }
+  #ptable-novel { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+  .pt-cell.novel {
+    aspect-ratio: auto; padding: 8px 4px; cursor: pointer; font-family: inherit;
+    background: rgba(255, 179, 71, 0.08); border: 1px solid var(--amber);
+    color: var(--amber); gap: 2px;
+    box-shadow: 0 0 14px rgba(255, 179, 71, 0.18);
+  }
+  .pt-cell.novel:hover { background: rgba(255, 179, 71, 0.2); }
+  .pt-cell.novel small { font-size: 0.58rem; opacity: 0.7; }
+  .pt-cell.novel b { font-size: 1.05rem; }
+  .pt-cell.novel i { font-style: normal; font-size: 0.52rem; letter-spacing: 0.12em; opacity: 0.8; }
+  .pt-cell.novel.theorized { opacity: 0.55; border-style: dashed; box-shadow: none; }
+  .pt-cell.novel.sampled { background: rgba(255, 179, 71, 0.25); }
+
+  #pt-detail { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 16px; }
+  .ptd-head { display: flex; align-items: center; gap: 14px; }
+  .ptd-z { font-size: 0.8rem; color: var(--muted); }
+  .ptd-symbol {
+    font-size: 2rem; color: var(--amber); border: 1px solid var(--amber);
+    padding: 4px 14px; font-weight: 300;
+  }
+  .ptd-head h3 { font-weight: 500; letter-spacing: 0.08em; }
+  .ptd-group { font-size: 0.74rem; color: var(--muted); }
+  .ptd-status {
+    margin-left: auto; font-size: 0.62rem; letter-spacing: 0.22em;
+    padding: 4px 10px; border: 1px solid var(--muted); color: var(--muted);
+  }
+  .ptd-status.sampled { border-color: var(--amber); color: var(--amber); }
+  .ptd-status.detected { border-color: var(--cyan); color: var(--cyan); }
+  .ptd-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 14px 0;
+  }
+  .ptd-grid div { display: flex; flex-direction: column; gap: 2px; }
+  .ptd-grid span { font-size: 0.62rem; letter-spacing: 0.18em; text-transform: uppercase; color: var(--muted); }
+  .ptd-grid strong { font-size: 0.8rem; font-weight: 500; }
+  .ptd-key { font-size: 0.88rem; line-height: 1.6; }
+  .ptd-earth {
+    margin-top: 10px; padding: 8px 12px; border-left: 2px solid var(--amber);
+    color: var(--amber); font-size: 0.78rem; line-height: 1.55; background: rgba(255,179,71,0.05);
+  }
+  .ptd-note { margin-top: 10px; font-size: 0.78rem; color: var(--muted); font-style: italic; }
+
+  /* ── Journal ── */
+  #journal-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+  .journal-card { border: 1px solid var(--line); padding: 12px 14px; }
+  .journal-card h4 { font-weight: 500; letter-spacing: 0.05em; margin-bottom: 4px; }
+  .journal-card p { font-size: 0.72rem; color: var(--cyan); margin-bottom: 6px; }
+  .journal-card small { color: var(--muted); font-size: 0.68rem; }
+  .journal-card.tier-5 { border-color: var(--amber); box-shadow: 0 0 16px rgba(255,179,71,0.15); }
+  .journal-card.tier-5 p { color: var(--amber); }
+  .journal-card.tier-0 { border-style: dashed; opacity: 0.8; }
+
+  /* ── Fabricator ── */
+  .fab-intro { font-size: 0.82rem; color: var(--muted); line-height: 1.6; margin-bottom: 14px; }
+  .fab-title { font-weight: 400; letter-spacing: 0.18em; color: var(--amber); margin-bottom: 10px; }
+  .fab-slots { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+  .fab-slot {
+    border: 1px dashed var(--line); padding: 12px; cursor: pointer;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .fab-slot.filled { border-style: solid; border-color: var(--cyan); }
+  .fab-slot-label { font-size: 0.66rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--cyan); }
+  .fab-slot-req { font-size: 0.7rem; color: var(--amber); }
+  .fab-slot strong { font-size: 0.85rem; font-weight: 500; }
+  .fab-slot small { font-size: 0.68rem; color: var(--muted); line-height: 1.5; }
+  .fab-inv-title { font-size: 0.66rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+  .fab-inv { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .fab-chip {
+    background: rgba(127,216,232,0.06); border: 1px solid var(--line); color: var(--text);
+    padding: 8px 12px; cursor: pointer; font-family: inherit; text-align: left;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .fab-chip:hover { border-color: var(--cyan); }
+  .fab-chip b { font-size: 0.78rem; font-weight: 500; }
+  .fab-chip span { font-size: 0.64rem; color: var(--amber); }
+  .fab-result { margin-top: 10px; font-size: 0.8rem; color: var(--amber); }
+  .fab-done h3 { color: var(--amber); font-weight: 400; letter-spacing: 0.1em; margin-bottom: 8px; }
+  .fab-done p { font-size: 0.84rem; line-height: 1.6; }
+
+  /* ── Lock prompt ── */
+  #lock-prompt {
+    position: fixed; inset: 0; z-index: 30; display: none;
+    align-items: center; justify-content: center; cursor: pointer;
+    background: rgba(2, 4, 8, 0.4);
+  }
+  #lock-prompt.visible { display: flex; }
+  #lock-prompt span {
+    border: 1px solid var(--cyan); color: var(--cyan); padding: 14px 28px;
+    letter-spacing: 0.25em; font-size: 0.8rem; text-transform: uppercase;
+    background: var(--panel);
+  }
+
+  /* ── Home button + end screen ── */
+  #btn-home {
+    position: fixed; bottom: 150px; left: 50%; transform: translateX(-50%);
+    z-index: 35; display: none;
+  }
+  #btn-home.show { display: block; animation: humPulse 2s infinite; }
+  #end-screen {
+    position: fixed; inset: 0; z-index: 70; display: none;
+    flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+    background: radial-gradient(ellipse at 50% 40%, rgba(16, 22, 38, 0.97), rgba(3, 5, 10, 0.99));
+    text-align: center; padding: 24px;
+  }
+  #end-screen.open { display: flex; }
+  #end-screen h1 { font-weight: 300; letter-spacing: 0.3em; color: var(--cyan); font-size: 1.8rem; text-indent: 0.3em; }
+  #end-screen .end-line { max-width: 520px; line-height: 1.8; color: var(--text); opacity: 0.9; }
+  #end-stats { display: flex; gap: 40px; }
+  #end-stats div { display: flex; flex-direction: column; gap: 6px; }
+  #end-stats strong { font-size: 1.8rem; color: var(--amber); font-weight: 300; }
+  #end-stats span { font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--muted); }
+  #end-screen .next { color: var(--muted); font-size: 0.78rem; letter-spacing: 0.12em; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+  <div id="canvas-root"></div>
+
+  <div id="title-screen">
+    <p class="sub">A Planet Discovery Game — vertical-slice prototype</p>
+    <h1>THE CATALOGUE</h1>
+    <p class="premise">
+      Humanity can finally cross between stars. You go not as a soldier or a colonist,
+      but as a scientist — with an AI partner trained on a universe it has now left behind.
+      Sixty light-years from a diminished Earth, a signal repeats every eleven hours.
+      Life is nearly everywhere. The whole game is learning how to see it.
+    </p>
+    <button class="btn" id="btn-start">Begin Survey</button>
+    <p class="controls-note">
+      WASD move · mouse look · 1–4 switch sense · hold E scan · G return to orbit<br/>
+      X elements chart · J journal · F fabricator · V toggle Halley's voice · ⏎ advance dialogue<br/>
+      headphones recommended — Halley speaks
+    </p>
+  </div>
+
+  <div id="hud" class="hidden">
+    <div id="location">—</div>
+    <div id="objective"></div>
+
+    <div id="sensor-bar">
+      <button data-sensor="VIS">VISUAL <span class="key">1</span></button>
+      <button data-sensor="THM">THERMAL <span class="key">2</span></button>
+      <button data-sensor="EMF">EM FIELD <span class="key">3</span></button>
+      <button data-sensor="TMP">TEMPORAL <span class="key">4</span></button>
+    </div>
+
+    <div id="crosshair"></div>
+    <div id="scan-prompt">
+      <div id="scan-ring"></div>
+      <div id="scan-label"></div>
+    </div>
+
+    <div id="dialogue">
+      <div id="dialogue-speaker">HALLEY</div>
+      <div id="dialogue-text"></div>
+      <div id="dialogue-hint"></div>
+    </div>
+
+    <div id="toast-root"></div>
+
+    <div id="planet-panel">
+      <div id="pp-name">—</div>
+      <div id="pp-visited"></div>
+      <div class="pp-section">Survey data</div>
+      <div id="pp-stats"></div>
+      <div class="pp-section">Formation history</div>
+      <ul id="pp-formation"></ul>
+      <div id="pp-hum">⚠ THE HUM — SIGNAL SOURCE TRIANGULATES HERE</div>
+      <button class="btn primary" id="pp-land">Land</button>
+    </div>
+
+    <div id="menu-bar">
+      <button id="btn-elements">Elements [X]</button>
+      <button id="btn-journal">Journal [J]</button>
+      <button id="btn-fab">Fabricator [F]</button>
+      <button id="btn-voice">🗣 Voice [V]</button>
+      <button id="btn-mute">🔊 Sound</button>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-elements">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>Expanded Periodic Table</h2>
+        <button data-close>✕</button>
+      </div>
+      <div id="ptable"></div>
+      <div class="novel-band">
+        <h3>⚠ The Vesper Extension — Period 8 · Not Found on Earth</h3>
+        <div id="ptable-novel"></div>
+      </div>
+      <div id="pt-detail"></div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-journal">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>The Catalogue — Life Journal</h2>
+        <button data-close>✕</button>
+      </div>
+      <div id="journal-list"></div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal-fab">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>Fabricator — Properties Workbench</h2>
+        <button data-close>✕</button>
+      </div>
+      <div id="fab-body"></div>
+    </div>
+  </div>
+
+  <div id="lock-prompt"><span>Click to take the surface</span></div>
+
+  <button class="btn primary" id="btn-home">Set course for home</button>
+
+  <div id="end-screen">
+    <h1>THE CATALOGUE</h1>
+    <p class="end-line">
+      “We crossed sixty light-years to start a catalogue of life,<br/>
+      and we are already an entry in someone else’s.”
+    </p>
+    <div id="end-stats"></div>
+    <p class="end-line">
+      Act III waits at home: pointing the Temporal Imager at Earth,<br/>
+      and finally seeing the life that was always here.
+    </p>
+    <p class="next">END OF VERTICAL-SLICE PROTOTYPE · REFRESH TO BEGIN A NEW SURVEY</p>
+  </div>
+
+  <div id="fade"></div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
